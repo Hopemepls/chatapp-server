@@ -11,7 +11,7 @@ app.use(express.json());
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*",  // Для продакшена: origin: "http://localhost:3000"
+    origin: "https://chatapp-9i5f.vercel.app/",  // Например, "https://your-app.vercel.app" или "https://your-static-site.onrender.com"
     methods: ["GET", "POST"]
   }
 });
