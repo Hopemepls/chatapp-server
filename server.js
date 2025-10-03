@@ -1,41 +1,57 @@
 const express = require('express');
-const cors = require('cors');
-const { Server } = require('socket.io');
 const http = require('http');
+const socketIo = require('socket.io');
+const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
-
-const app = express();
-app.use(cors());  // Это для Express, но для Socket.io CORS настраивается ниже
-app.use(express.json());
-
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: "https://chatapp-9i5f.vercel.app",  // URL вашего фронтенда на Vercel (без слэша в конце)
-    methods: ["GET", "POST"],
-    credentials: true,  // Добавлено для безопасности, если нужны cookies
-  }
-});
-
-// Инициализация Prisma
 const prisma = new PrismaClient();
 
-// Тестируем подключение (опционально, для отладки)
-async function testConnection() {
-  try {
-    await prisma.$connect();
-    console.log('Prisma подключена к БД');
-  } catch (error) {
-    console.error('Ошибка подключения к БД:', error);
-  }
-}
-testConnection();
+const app = express();
+const server = http.createServer(app);
 
-// Маршрут /messages — возвращает историю сообщений из БД
+// Настройка CORS для Socket.io (разрешает подключения с фронтенда)
+const io = socketIo(server, {
+  cors: {
+    origin: 'https://chatapp-9i5f.vercel.app',  // Ваш фронтенд на Vercel
+    methods: ['GET', 'POST'],
+  },
+});
+
+// Настройка CORS для Express
+app.use(cors({
+  origin: 'https://chatapp-9i5f.vercel.app',  // Тот же origin
+  credentials: true,
+}));
+app.use(express.json());
+
+// Логика Socket.io
+io.on('connection', (socket) => {
+  console.log('Пользователь подключился:', socket.id);
+
+  socket.on('sendMessage', async (data) => {
+    try {
+      const message = await prisma.message.create({
+        data: {
+          username: data.username,
+          text: data.text,
+        },
+      });
+      io.emit('receiveMessage', message);
+    } catch (error) {
+      console.error('Ошибка сохранения сообщения:', error);
+      socket.emit('error', 'Не удалось сохранить сообщение');
+    }
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Пользователь отключился:', socket.id);
+  });
+});
+
+// Маршрут для получения сообщений
 app.get('/messages', async (req, res) => {
   try {
-    const messages = await prisma.chat.findMany({
-      orderBy: { createdAt: 'asc' }  // Сортировка по времени создания
+    const messages = await prisma.message.findMany({
+      orderBy: { createdAt: 'asc' },
     });
     res.json(messages);
   } catch (error) {
@@ -44,56 +60,7 @@ app.get('/messages', async (req, res) => {
   }
 });
 
-// Тестовый маршрут для проверки подключения к базе данных
-app.get('/test-db', async (req, res) => {
-  try {
-    await prisma.$connect();
-    const count = await prisma.chat.count();
-    res.json({ status: 'OK', count });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-io.on('connection', (socket) => {
-  console.log(`Пользователь подключился: ${socket.id}`);
-
-  socket.on('sendMessage', async (data) => {
-    try {
-      // Сохраняем сообщение (уберите createdAt, если в схеме default(now()))
-      const message = await prisma.chat.create({
-        data: {
-          username: data.username,
-          text: data.text
-          // createdAt: new Date()  // Уберите, если в схеме есть @default(now())
-        }
-      });
-      console.log('Сообщение сохранено:', message);
-
-      // Отправляем всем клиентам
-      io.emit('receiveMessage', message);
-    } catch (error) {
-      console.error('Ошибка сохранения сообщения:', error);
-      socket.emit('error', 'Не удалось сохранить сообщение');  // Отправляем ошибку клиенту
-    }
-  });
-
-  socket.on('disconnect', () => {
-    console.log(`Пользователь отключился: ${socket.id}`);
-  });
-});
-
-app.get('/', (req, res) => {
-  res.send('Сервер чата работает!');
-});
-
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
-  console.log(`Сервер с Socket.io и Prisma запущен на порту ${PORT}`);
-});
-
-// Graceful shutdown для Prisma
-process.on('SIGINT', async () => {
-  await prisma.$disconnect();
-  process.exit(0);
+  console.log(`Сервер запущен на порту ${PORT}`);
 });
