@@ -12,10 +12,10 @@ const server = http.createServer(app);
 // Инициализация Socket.io с transports для fallback
 const io = new Server(server, {
   cors: {
-    origin: "https://chatapp-9i5f.vercel.app", // Точный URL фронтенда (проверьте, что он верный)
+    origin: "https://chatapp-9i5f.vercel.app", // Точный URL фронтенда
     methods: ["GET", "POST"]
   },
-  transports: ["websocket", "polling"] // Разрешить fallback на polling, если WebSocket не работает
+  transports: ["websocket", "polling"] // Fallback на polling
 });
 
 app.use(cors({
@@ -25,20 +25,20 @@ app.use(cors({
 
 app.use(express.json());
 
-// Логика Socket.io с дополнительными логами
+// Логика Socket.io
 io.on('connection', (socket) => {
   console.log('Пользователь подключился:', socket.id);
-  console.log('Транспорт:', socket.conn.transport.name); // Лог транспорта для диагностики
+  console.log('Транспорт:', socket.conn.transport.name);
 
   socket.on('sendMessage', async (data) => {
     try {
-      const message = await prisma.message.create({
+      const chatMessage = await prisma.chat.create({  // Используем модель chat
         data: {
           username: data.username,
           text: data.text,
         },
       });
-      io.emit('receiveMessage', message);
+      io.emit('receiveMessage', chatMessage);
     } catch (error) {
       console.error('Ошибка сохранения сообщения:', error);
       socket.emit('error', 'Не удалось сохранить сообщение');
@@ -53,7 +53,7 @@ io.on('connection', (socket) => {
 // Маршрут для получения сообщений
 app.get('/messages', async (req, res) => {
   try {
-    const messages = await prisma.message.findMany({
+    const messages = await prisma.chat.findMany({  // Используем модель chat
       orderBy: { createdAt: 'asc' },
     });
     res.json(messages);
