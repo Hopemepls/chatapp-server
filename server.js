@@ -1,31 +1,34 @@
 const express = require('express');
 const http = require('http');
-const socketIo = require('socket.io');
+const { Server } = require('socket.io'); // Правильный импорт для v4
 const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
+
 const prisma = new PrismaClient();
 
 const app = express();
 const server = http.createServer(app);
 
-// Настройка CORS для Socket.io (разрешает подключения с фронтенда)
-const io = socketIo(server, {
+// Инициализация Socket.io с transports для fallback
+const io = new Server(server, {
   cors: {
-    origin: 'https://chatapp-9i5f.vercel.app',  // Ваш фронтенд на Vercel
-    methods: ['GET', 'POST'],
+    origin: "https://chatapp-9i5f.vercel.app", // Точный URL фронтенда (проверьте, что он верный)
+    methods: ["GET", "POST"]
   },
+  transports: ["websocket", "polling"] // Разрешить fallback на polling, если WebSocket не работает
 });
 
-// Настройка CORS для Express
 app.use(cors({
-  origin: 'https://chatapp-9i5f.vercel.app',  // Тот же origin
-  credentials: true,
+  origin: "https://chatapp-9i5f.vercel.app",
+  methods: ["GET", "POST"]
 }));
+
 app.use(express.json());
 
-// Логика Socket.io
+// Логика Socket.io с дополнительными логами
 io.on('connection', (socket) => {
   console.log('Пользователь подключился:', socket.id);
+  console.log('Транспорт:', socket.conn.transport.name); // Лог транспорта для диагностики
 
   socket.on('sendMessage', async (data) => {
     try {
