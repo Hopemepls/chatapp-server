@@ -5,14 +5,15 @@ const http = require('http');
 const { PrismaClient } = require('@prisma/client');
 
 const app = express();
-app.use(cors());
+app.use(cors());  // Это для Express, но для Socket.io CORS настраивается ниже
 app.use(express.json());
 
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "https://chatapp-server61.onrender.com/",  // Например, "https://your-app.vercel.app" или "https://your-static-site.onrender.com"
-    methods: ["GET", "POST"]
+    origin: "https://chatapp-9i5f.vercel.app",  // URL вашего фронтенда на Vercel (без слэша в конце)
+    methods: ["GET", "POST"],
+    credentials: true,  // Добавлено для безопасности, если нужны cookies
   }
 });
 
@@ -30,10 +31,17 @@ async function testConnection() {
 }
 testConnection();
 
-// Временный маршрут /messages — возвращаем пустой массив (заглушка)
-app.get('/messages', (req, res) => {
-  console.log('Возвращаем пустую историю сообщений (заглушка)');
-  res.json([]);  // Возвращаем пустой массив, чтобы избежать ошибки 500
+// Маршрут /messages — возвращает историю сообщений из БД
+app.get('/messages', async (req, res) => {
+  try {
+    const messages = await prisma.chat.findMany({
+      orderBy: { createdAt: 'asc' }  // Сортировка по времени создания
+    });
+    res.json(messages);
+  } catch (error) {
+    console.error('Ошибка получения сообщений:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Тестовый маршрут для проверки подключения к базе данных
@@ -89,4 +97,3 @@ process.on('SIGINT', async () => {
   await prisma.$disconnect();
   process.exit(0);
 });
-
